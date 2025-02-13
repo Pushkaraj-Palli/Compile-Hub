@@ -1,18 +1,50 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import "./Main.css";
 import LangList from "../LangList/LangList";
 import { useLanguage } from "../../context/LanguageContext";
-
-//////////////
 import SyntaxHighlighter from "react-syntax-highlighter";
 import { atomOneDark } from "react-syntax-highlighter/dist/esm/styles/hljs";
 
 function Main() {
   const [code, setCode] = useState("");
   const [output, setOutput] = useState("");
+  const [currentInput, setCurrentInput] = useState("");
+  const [isRunning, setIsRunning] = useState(false);
   const [lineCount, setLineCount] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
+  const [terminalContent, setTerminalContent] = useState([]);
+  const terminalRef = useRef(null);
   const { selectedLanguage, fileExtension } = useLanguage();
+  const wsRef = useRef(null);
+
+  useEffect(() => {
+    // Connect to WebSocket when component mounts
+    wsRef.current = new WebSocket('ws://localhost:5000');
+
+    wsRef.current.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      if (message.type === 'output') {
+        setTerminalContent(prev => [...prev, { type: 'output', content: message.data }]);
+        scrollToBottom();
+      } else if (message.type === 'input-request') {
+        setTerminalContent(prev => [...prev, { type: 'input-request', content: message.data }]);
+        scrollToBottom();
+      } else if (message.type === 'program-end') {
+        setIsRunning(false);
+      }
+    };
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
+
+  const scrollToBottom = () => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  };
 
   const handleCodeChange = (e) => {
     const text = e.target.value;
@@ -21,36 +53,38 @@ function Main() {
     setLineCount(lines);
   };
 
+  const handleTerminalInput = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && isRunning) {
+      e.preventDefault();
+      const input = currentInput.trim();
+      setTerminalContent(prev => [...prev, { type: 'input', content: input }]);
+      wsRef.current.send(JSON.stringify({ type: 'input', data: input }));
+      setCurrentInput('');
+      scrollToBottom();
+    }
+  };
+
   const handleRun = async () => {
-    setIsLoading(true);
+    if (!code.trim()) return;
+    
+    setIsRunning(true);
+    setTerminalContent([]);
+    
     try {
-      const endpoint = `/api/run-${selectedLanguage}`;
-      const response = await fetch(`http://localhost:5000${endpoint}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ code }),
-      });
-
-      const data = await response.json();
-
-      if (data.error) {
-        setOutput(data.error);
-      } else {
-        setOutput(
-          data.output || "Program executed successfully with no output"
-        );
-      }
+      wsRef.current.send(JSON.stringify({
+        type: 'run',
+        language: selectedLanguage,
+        code: code
+      }));
     } catch (error) {
-      setOutput("Error connecting to server: " + error.message);
-    } finally {
-      setIsLoading(false);
+      setTerminalContent([{ type: 'error', content: 'Failed to start program: ' + error.message }]);
+      setIsRunning(false);
     }
   };
 
   const handleClear = () => {
-    setOutput("");
+    setTerminalContent([]);
+    setCurrentInput('');
   };
 
   return (
@@ -70,8 +104,12 @@ function Main() {
               <button>Theme</button>
               <button>Share</button>
               <button>Save</button>
-              <button onClick={handleRun} disabled={isLoading} id="runBtn">
-                {isLoading ? "Running..." : "Run"}
+              <button 
+                onClick={handleRun} 
+                disabled={isRunning} 
+                id="runBtn"
+              >
+                {isRunning ? "Running..." : "Run"}
               </button>
             </div>
 
@@ -119,23 +157,37 @@ function Main() {
                   />
                 </div>
               </div>
-
-              {/* 123 */}
             </div>
           </div>
 
           <div className="terminal">
             <div className="output_header">
-              <p>Output</p>
+              <p>Terminal</p>
               <button onClick={handleClear}>Clear</button>
             </div>
-            <div className="output">
-              <textarea
-                readOnly
-                value={output}
-                placeholder="Output will be displayed here"
-                className="output_text"
-              ></textarea>
+            <div className="terminal-content" ref={terminalRef}>
+              {terminalContent.map((item, index) => (
+                <div 
+                  key={index} 
+                  className={`terminal-line ${item.type}`}
+                >
+                  {item.type === 'input' && '> '}
+                  {item.content}
+                </div>
+              ))}
+              {isRunning && (
+                <div className="terminal-input-line">
+                  <span className="prompt">{'> '}</span>
+                  <input
+                    type="text"
+                    value={currentInput}
+                    onChange={(e) => setCurrentInput(e.target.value)}
+                    onKeyPress={handleTerminalInput}
+                    disabled={!isRunning}
+                    autoFocus
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -145,4 +197,3 @@ function Main() {
 }
 
 export default Main;
-

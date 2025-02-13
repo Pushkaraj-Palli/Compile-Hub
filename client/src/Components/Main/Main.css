@@ -191,10 +191,65 @@
   outline: none;
   background: transparent;
   color: transparent;
-  caret-color: #fff; /* Make cursor visible */
+  caret-color: #fff;
   font-family: monospace;
   font-size: 14px;
   line-height: 1.5;
   resize: none;
   z-index: 1;
+}
+
+
+
+
+.terminal-content {
+  flex: 1;
+  padding: 10px;
+  background-color: #252526;
+  color: #d4d4d4;
+  font-family: monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-y: auto;
+  flex-direction: column;
+}
+
+.terminal-line {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin-bottom: 4px;
+}
+
+.terminal-line.input {
+  color: #569cd6;
+}
+
+.terminal-line.error {
+  color: #f48771;
+}
+
+.terminal-input-line {
+  display: flex;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.terminal-input-line .prompt {
+  color: #569cd6;
+  margin-right: 4px;
+}
+
+.terminal-input-line input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #d4d4d4;
+  font-family: monospace;
+  font-size: 14px;
+  outline: none;
+  padding: 0;
+}
+
+.terminal-input-line input:disabled {
+  opacity: 0.5;
 }
